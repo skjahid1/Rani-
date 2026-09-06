@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SNN Recharts Live Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background-color: #05070a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 12px;
+      overflow-x: hidden;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .card {
+      background: rgba(13, 22, 43, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: #f1f5f9;
+      letter-spacing: 0.3px;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 700;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .badge.emerald {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 6px;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+    .dot.l23 { background: #00f5d4; }
+    .dot.l4 { background: #a855f7; }
+    .dot.l5 { background: #10b981; }
+    .dot.pv { background: #f43f5e; }
+    .dot.overall { background: #38bdf8; }
+
+    /* Recharts SVG Chart Styles */
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .grid-line {
+      stroke: rgba(255, 255, 255, 0.07);
+      stroke-dasharray: 4 4;
+      stroke-width: 1;
+    }
+    .axis-line {
+      stroke: rgba(255, 255, 255, 0.15);
+      stroke-width: 1;
+    }
+    .axis-text {
+      font-size: 9px;
+      fill: #64748b;
+      font-family: monospace;
+    }
+    .area-path {
+      transition: d 0.15s ease-out;
+    }
+    .line-path {
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: d 0.15s ease-out;
+    }
+
+    /* Metric Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .metric-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .metric-label {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .metric-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #38bdf8;
+      font-family: monospace;
+      margin-top: 2px;
+    }
+
+    /* Layer Synchronization Bars */
+    .sync-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+    }
+    .sync-bar-bg {
+      flex: 1;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 4px;
+      margin: 0 10px;
+      overflow: hidden;
+    }
+    .sync-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #00f5d4, #38bdf8);
+      transition: width 0.2s ease-out;
+    }
+
+    /* Node Activity Matrix */
+    .node-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      gap: 3px;
+      margin-top: 6px;
+      padding: 6px;
+      background: rgba(3, 7, 18, 0.6);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .node-cell {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      background: #1e293b;
+      transition: background-color 0.1s, transform 0.1s;
+    }
+    .node-cell.spiking {
+      background: #ffffff !important;
+      box-shadow: 0 0 6px #00f5d4;
+      transform: scale(1.2);
+      z-index: 2;
+    }
+    .tooltip-box {
+      font-size: 10px;
+      color: #94a3b8;
+      text-align: center;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Real-time Firing Rates Area Chart (Recharts) -->
+    <div class="card">
+      <div class="card-title">
+        <span>Cortical Layer Firing Rates (Hz)</span>
+        <span class="badge" id="simTimeBadge">T: 0.0s</span>
+      </div>
+
+      <!-- Recharts Responsive Container -->
+      <div id="chartContainer" style="width: 100%; height: 160px; position: relative;">
+        <svg id="firingChart" viewBox="0 0 340 160">
+          <defs>
+            <linearGradient id="gradL23" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#00f5d4" stop-opacity="0.4" />
+              <stop offset="100%" stop-color="#00f5d4" stop-opacity="0.0" />
+            </linearGradient>
+            <linearGradient id="gradL4" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#a855f7" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0" />
+            </linearGradient>
+            <linearGradient id="gradPv" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          <!-- Grid Lines -->
+          <line x1="28" y1="20" x2="330" y2="20" class="grid-line" />
+          <line x1="28" y1="60" x2="330" y2="60" class="grid-line" />
+          <line x1="28" y1="100" x2="330" y2="100" class="grid-line" />
+          <line x1="28" y1="140" x2="330" y2="140" class="axis-line" />
+          <line x1="28" y1="15" x2="28" y2="140" class="axis-line" />
+
+          <!-- Y Axis Labels -->
+          <text x="22" y="24" class="axis-text" text-anchor="end">40Hz</text>
+          <text x="22" y="64" class="axis-text" text-anchor="end">25Hz</text>
+          <text x="22" y="104" class="axis-text" text-anchor="end">10Hz</text>
+          <text x="22" y="142" class="axis-text" text-anchor="end">0Hz</text>
+
+          <!-- Area & Line Paths -->
+          <path id="areaPv" class="area-path" fill="url(#gradPv)" />
+          <path id="linePv" class="line-path" stroke="#f43f5e" />
+
+          <path id="areaL4" class="area-path" fill="url(#gradL4)" />
+          <path id="lineL4" class="line-path" stroke="#a855f7" />
+
+          <path id="areaL23" class="area-path" fill="url(#gradL23)" />
+          <path id="lineL23" class="line-path" stroke="#00f5d4" />
+
+          <path id="lineOverall" class="line-path" stroke="#38bdf8" stroke-dasharray="3 3" />
+        </svg>
+      </div>
+
+      <!-- Recharts Legend -->
+      <div class="legend">
+        <div class="legend-item"><span class="dot l23"></span> L2/3 Pyramidal</div>
+        <div class="legend-item"><span class="dot l4"></span> L4 Stellate</div>
+        <div class="legend-item"><span class="dot l5"></span> L5 Pyramidal</div>
+        <div class="legend-item"><span class="dot pv"></span> PV Basket (Inh)</div>
+        <div class="legend-item"><span class="dot overall"></span> Mean</div>
+      </div>
+    </div>
+
+    <!-- Layer Synchronization & Phase Coherence -->
+    <div class="card">
+      <div class="card-title">
+        <span>Layer Synchronization & Coherence</span>
+        <span class="badge emerald" id="syncOverallBadge">Sync: 0.74</span>
+      </div>
+
+      <div class="sync-row">
+        <span style="width: 110px;">L2/3 ↔ L4 Feedforward</span>
+        <div class="sync-bar-bg">
+          <div id="barL2L4" class="sync-bar-fill" style="width: 74%;"></div>
+        </div>
+        <span id="valL2L4" style="font-family: monospace; font-size: 11px; width: 34px; text-align: right;">0.74</span>
+      </div>
+
+      <div class="sync-row">
+        <span style="width: 110px;">L4 ↔ L5 Deep Feedback</span>
+        <div class="sync-bar-bg">
+          <div id="barL4L5" class="sync-bar-fill" style="width: 69%; background: linear-gradient(90deg, #a855f7, #10b981);"></div>
+        </div>
+        <span id="valL4L5" style="font-family: monospace; font-size: 11px; width: 34px; text-align: right;">0.69</span>
+      </div>
+
+      <div class="sync-row">
+        <span style="width: 110px;">Pyramidal ↔ Interneuron</span>
+        <div class="sync-bar-bg">
+          <div id="barPv" class="sync-bar-fill" style="width: 81%; background: linear-gradient(90deg, #f43f5e, #38bdf8);"></div>
+        </div>
+        <span id="valPv" style="font-family: monospace; font-size: 11px; width: 34px; text-align: right;">0.81</span>
+      </div>
+
+      <!-- Real-time Synchrony Wave SVG -->
+      <div style="margin-top: 8px;">
+        <svg id="syncChart" viewBox="0 0 340 50" style="height: 50px;">
+          <defs>
+            <linearGradient id="gradSync" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="48" x2="340" y2="48" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+          <line x1="0" y1="20" x2="340" y2="20" stroke="rgba(16,185,129,0.3)" stroke-dasharray="2 2" />
+          <path id="areaSync" fill="url(#gradSync)" />
+          <path id="lineSync" fill="none" stroke="#10b981" stroke-width="1.8" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- 120 SNN Nodes Activity Matrix -->
+    <div class="card">
+      <div class="card-title">
+        <span>SNN Cortical Node Activity (120 Nodes)</span>
+        <span class="badge" id="activeNodesBadge">Active: 42/120</span>
+      </div>
+      <div class="node-matrix-grid" id="nodeMatrix">
+        <!-- 120 Node Cells populated dynamically -->
+      </div>
+      <div class="tooltip-box" id="nodeInspector">
+        Tap or hover over any node to inspect membrane potential and layer classification.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize 120 Node Cells
+    const matrixContainer = document.getElementById("nodeMatrix");
+    const nodeCells = [];
+    const NUM_NODES = 120;
+
+    for (let i = 0; i < NUM_NODES; i++) {
+      const cell = document.createElement("div");
+      cell.className = "node-cell";
+      cell.dataset.id = i;
+      let layerName = "L2/3 Pyramidal";
+      if (i >= 96) layerName = "PV Basket (Inh)";
+      else if (i >= 78) layerName = "L5 Pyramidal";
+      else if (i >= 54) layerName = "L4 Stellate";
+
+      cell.dataset.layer = layerName;
+      cell.onclick = () => {
+        document.getElementById("nodeInspector").innerHTML = 
+          `<b style="color:#00f5d4">Node #${i}</b> (${layerName}) &bull; ` +
+          `V: <span style="color:#f8fafc">${cell.dataset.voltage || "-65.0"} mV</span> &bull; ` +
+          `State: <span style="color:${cell.classList.contains("spiking") ? "#10b981" : "#94a3b8"}">${cell.classList.contains("spiking") ? "SPIKING" : "Polarized"}</span>`;
+      };
+      matrixContainer.appendChild(cell);
+      nodeCells.push(cell);
+    }
+
+    // Chart dimensions
+    const W = 340;
+    const H = 160;
+    const X_LEFT = 28;
+    const X_RIGHT = 330;
+    const Y_TOP = 15;
+    const Y_BOTTOM = 140;
+    const MAX_HZ = 45.0;
+
+    function scaleX(index, total) {
+      if (total <= 1) return X_LEFT;
+      return X_LEFT + (index / (total - 1)) * (X_RIGHT - X_LEFT);
+    }
+
+    function scaleY(hz) {
+      const clamped = Math.max(0, Math.min(MAX_HZ, hz));
+      return Y_BOTTOM - (clamped / MAX_HZ) * (Y_BOTTOM - Y_TOP);
+    }
+
+    function createBezierPath(points) {
+      if (!points || points.length === 0) return "";
+      let d = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 0; i < points.length - 1; i++) {
+        const p0 = i > 0 ? points[i - 1] : points[i];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = i != points.length - 2 ? points[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+      }
+      return d;
+    }
+
+    function createAreaPath(points) {
+      if (!points || points.length === 0) return "";
+      const lineD = createBezierPath(points);
+      const lastX = points[points.length - 1].x;
+      const firstX = points[0].x;
+      return `${lineD} L ${lastX} ${Y_BOTTOM} L ${firstX} ${Y_BOTTOM} Z`;
+    }
+
+    // Synchrony mini chart helper
+    function updateSyncChart(history) {
+      if (!history || history.length === 0) return;
+      const syncW = 340;
+      const syncH = 48;
+      const points = history.map((pt, idx) => ({
+        x: (idx / (history.length - 1)) * syncW,
+        y: syncH - Math.max(0.1, Math.min(1.0, pt.synchronyIndex)) * (syncH - 6)
+      }));
+
+      const lineD = createBezierPath(points);
+      const areaD = `${lineD} L ${syncW} ${syncH} L 0 ${syncH} Z`;
+
+      document.getElementById("lineSync").setAttribute("d", lineD);
+      document.getElementById("areaSync").setAttribute("d", areaD);
+    }
+
+    // Color gradient for membrane potential
+    function getVoltageColor(v, layerIdx) {
+      // v ranges from -70 to +30
+      if (v > -55) return "#ffffff"; // Spiking
+      const norm = Math.max(0, Math.min(1, (v - (-75)) / 25));
+      if (layerIdx === 3) {
+        // PV basket: red/coral
+        return `rgba(244, 63, 94, ${0.15 + norm * 0.7})`;
+      } else if (layerIdx === 1) {
+        // L4: purple
+        return `rgba(168, 85, 247, ${0.15 + norm * 0.7})`;
+      } else if (layerIdx === 2) {
+        // L5: emerald
+        return `rgba(16, 185, 129, ${0.15 + norm * 0.7})`;
+      } else {
+        // L2/3: cyan
+        return `rgba(0, 245, 212, ${0.15 + norm * 0.7})`;
+      }
+    }
+
+    // Main Update function called from Kotlin / WebView
+    window.updateSnnData = function(data) {
+      if (typeof data === "string") {
+        try { data = JSON.parse(data); } catch(e) { return; }
+      }
+      if (!data) return;
+
+      // Update badges & metrics
+      if (data.timeMs !== undefined) {
+        document.getElementById("simTimeBadge").innerText = `T: ${(data.timeMs / 1000).toFixed(1)}s`;
+      }
+      if (data.synchronyIndex !== undefined) {
+        document.getElementById("syncOverallBadge").innerText = `Sync: ${data.synchronyIndex.toFixed(2)}`;
+      }
+      if (data.layerSyncL2L4 !== undefined) {
+        document.getElementById("barL2L4").style.width = `${(data.layerSyncL2L4 * 100).toFixed(0)}%`;
+        document.getElementById("valL2L4").innerText = data.layerSyncL2L4.toFixed(2);
+      }
+      if (data.layerSyncL4L5 !== undefined) {
+        document.getElementById("barL4L5").style.width = `${(data.layerSyncL4L5 * 100).toFixed(0)}%`;
+        document.getElementById("valL4L5").innerText = data.layerSyncL4L5.toFixed(2);
+      }
+      if (data.layerSyncPv !== undefined) {
+        document.getElementById("barPv").style.width = `${(data.layerSyncPv * 100).toFixed(0)}%`;
+        document.getElementById("valPv").innerText = data.layerSyncPv.toFixed(2);
+      }
+
+      // Render firing rates history
+      const history = data.history || [];
+      if (history.length > 1) {
+        const total = history.length;
+        const ptsL23 = history.map((h, i) => ({ x: scaleX(i, total), y: scaleY(h.layer23Hz) }));
+        const ptsL4 = history.map((h, i) => ({ x: scaleX(i, total), y: scaleY(h.layer4Hz) }));
+        const ptsPv = history.map((h, i) => ({ x: scaleX(i, total), y: scaleY(h.layerPvHz) }));
+        const ptsMean = history.map((h, i) => ({ x: scaleX(i, total), y: scaleY(h.overallHz) }));
+
+        document.getElementById("lineL23").setAttribute("d", createBezierPath(ptsL23));
+        document.getElementById("areaL23").setAttribute("d", createAreaPath(ptsL23));
+
+        document.getElementById("lineL4").setAttribute("d", createBezierPath(ptsL4));
+        document.getElementById("areaL4").setAttribute("d", createAreaPath(ptsL4));
+
+        document.getElementById("linePv").setAttribute("d", createBezierPath(ptsPv));
+        document.getElementById("areaPv").setAttribute("d", createAreaPath(ptsPv));
+
+        document.getElementById("lineOverall").setAttribute("d", createBezierPath(ptsMean));
+
+        updateSyncChart(history);
+      }
+
+      // Render 120 Node Cells
+      const nodes = data.nodes || [];
+      let activeCount = 0;
+      for (let i = 0; i < NUM_NODES; i++) {
+        const cell = nodeCells[i];
+        if (i < nodes.length) {
+          const node = nodes[i];
+          cell.dataset.voltage = node.voltage.toFixed(1);
+          const layerIdx = i >= 96 ? 3 : (i >= 78 ? 2 : (i >= 54 ? 1 : 0));
+          if (node.isSpiking) {
+            cell.classList.add("spiking");
+            activeCount++;
+          } else {
+            cell.classList.remove("spiking");
+            cell.style.backgroundColor = getVoltageColor(node.voltage, layerIdx);
+            if (node.voltage > -60) activeCount++;
+          }
+        }
+      }
+      document.getElementById("activeNodesBadge").innerText = `Active: ${activeCount}/${NUM_NODES}`;
+    };
+
+    // Pre-populate with realistic starting data
+    const initialHistory = [];
+    for (let i = 0; i < 20; i++) {
+      initialHistory.push({
+        layer23Hz: 12 + Math.sin(i * 0.4) * 3,
+        layer4Hz: 18 + Math.cos(i * 0.5) * 4,
+        layer5Hz: 15 + Math.sin(i * 0.3) * 2,
+        layerPvHz: 24 + Math.cos(i * 0.4) * 5,
+        overallHz: 15 + Math.sin(i * 0.2) * 2,
+        synchronyIndex: 0.72 + Math.sin(i * 0.3) * 0.1
+      });
+    }
+    window.updateSnnData({
+      timeMs: 2500,
+      synchronyIndex: 0.74,
+      layerSyncL2L4: 0.74,
+      layerSyncL4L5: 0.69,
+      layerSyncPv: 0.81,
+      history: initialHistory,
+      nodes: Array.from({length: 120}, (_, i) => ({
+        id: i,
+        layer: i >= 96 ? "PV Basket" : "Pyramidal",
+        voltage: -65 + Math.random() * 18,
+        isSpiking: i % 14 === 0,
+        calcium: 0.06
+      }))
+    });
+  </script>
+</body>
+</html>
