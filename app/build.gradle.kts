@@ -40,13 +40,20 @@ android {
   }
 
   buildTypes {
-    release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+    getByName("release") {
+        isMinifyEnabled = false
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
+        signingConfig = signingConfigs.getByName("release")
     }
-    debug { }
+    
+    getByName("debug") {
+        signingConfig = signingConfigs.getByName("debugConfig") 
+    }
+}
+
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
